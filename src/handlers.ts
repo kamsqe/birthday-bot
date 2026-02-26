@@ -46,6 +46,14 @@ export class BotHandler {
       }
     }
 
+    // In groups, also catch replies to the bot's "Send me your gift idea" prompt
+    // Telegram delivers reply-to-bot messages even with Privacy Mode on
+    if (isGroup && message.reply_to_message?.from?.is_bot && !text.startsWith('/')) {
+      // Check if the user has an active wishlist state (they're replying to the prompt)
+      // If we already processed above, we won't reach here. This is a fallback.
+      return;
+    }
+
     // In groups, only respond to bot commands — don't process random messages
     if (isGroup && !text.startsWith('/')) return;
 
@@ -401,14 +409,16 @@ export class BotHandler {
 
       const rawText = query.message.text || '';
       const parts = rawText.split('\n\n');
-      const captionText = parts.length > 1 ? parts.slice(1).join('\n\n') : rawText;
+      // Strip HTML tags and get just the birthday message text for caption
+      let captionText = parts.length > 1 ? parts.slice(1).join('\n\n') : rawText;
+      captionText = captionText.replace(/<[^>]*>/g, '').trim();
 
       const gifs = [
-        "https://media.tenor.com/CGB-TzH25U4AAAAC/happy-birthday.gif",
-        "https://media.tenor.com/i98s985D0RkAAAAC/happy-birthday.gif",
-        "https://media.tenor.com/GfU72p-lJxgAAAAC/happy-birthday-steve-carell.gif",
-        "https://media.tenor.com/Z4T-rXj0u7oAAAAC/happy-birthday-the-office.gif",
-        "https://media.tenor.com/-d1t_7TjDEQAAAAC/michael-scott-the-office.gif"
+        "https://media.giphy.com/media/g5R9dok94mrIvplmZd/giphy.gif",
+        "https://media.giphy.com/media/WRL7YgP42OKns6BSzV/giphy.gif",
+        "https://media.giphy.com/media/xUOwFZmWFBGJrIYLe0/giphy.gif",
+        "https://media.giphy.com/media/l4KhS0BOFBhU2SYIU/giphy.gif",
+        "https://media.giphy.com/media/3ohs4lclWYOoT0FRTW/giphy.gif"
       ];
       const randomGif = gifs[Math.floor(Math.random() * gifs.length)];
 
@@ -419,8 +429,13 @@ export class BotHandler {
         ]
       };
 
-      await this.bot.sendAnimation(chatId, randomGif, captionText);
-      await this.bot.sendMessage(chatId, `🎉 GIF Card created! Forward the GIF above to your friend.`, backKeyboard);
+      try {
+        await this.bot.sendAnimation(chatId, randomGif, captionText);
+        await this.bot.sendMessage(chatId, `🎉 GIF Card created! Forward the GIF above to your friend.`, backKeyboard);
+      } catch (err: any) {
+        // Fallback: if GIF fails, just send the text with emojis
+        await this.bot.sendMessage(chatId, `🎂🎉 <b>Birthday Card:</b>\n\n${captionText}\n\n<i>(GIF couldn't load, but the message is ready to forward!)</i>`, backKeyboard);
+      }
     }
     else if (data.startsWith('set_pref:')) {
       const pref = data.split(':')[1];
@@ -706,9 +721,16 @@ export class BotHandler {
       if (!b) return;
 
       // In groups, key state by user ID so multiple users can add ideas independently
-      const stateKey = chatId < 0 ? query.from.id : chatId;
+      const isGroupChat = chatId < 0;
+      const stateKey = isGroupChat ? query.from.id : chatId;
       await this.db.setChatState(stateKey, 'awaiting_wishlist', bId.toString());
-      await this.bot.sendMessage(chatId, `🎁 <b>Send me your gift idea for ${b.name}!</b>\n\n<i>Just type it as your next message. You have 5 minutes.</i>`);
+
+      // Use force_reply so Telegram delivers the reply even with Privacy Mode on in groups
+      await this.bot.sendMessage(
+        chatId,
+        `🎁 <b>Send me your gift idea for ${b.name}!</b>\n\n<i>Reply to this message with your idea. You have 5 minutes.</i>`,
+        { force_reply: true, selective: true }
+      );
     }
     else if (data.startsWith('wishlist_del:')) {
       const parts = data.split(':');
