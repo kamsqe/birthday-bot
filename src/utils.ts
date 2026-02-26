@@ -40,3 +40,21 @@ export function getRelationshipIcon(rel: string | null): string {
     default: return '👋';
   }
 }
+
+const ZW0 = '\u200B';
+const ZW1 = '\u200C';
+const ZWT = '\u200D';
+
+export function encodeInvisibleId(id: number): string {
+    const binary = id.toString(2);
+    return binary.split('').map(b => b === '0' ? ZW0 : ZW1).join('') + ZWT;
+}
+
+export function decodeInvisibleId(text: string): number | null {
+    if (!text) return null;
+    const regex = new RegExp(`([${ZW0}${ZW1}]+)${ZWT}$`);
+    const res = text.match(regex);
+    if (!res) return null;
+    const binary = res[1].split('').map(c => c === ZW0 ? '0' : '1').join('');
+    return parseInt(binary, 2);
+}

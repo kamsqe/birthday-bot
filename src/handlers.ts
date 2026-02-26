@@ -22,16 +22,8 @@ export class BotHandler {
 
     // Handle Wishlist item replies
     if (message.reply_to_message?.text?.includes('gift idea for')) {
-      let bId = null;
-      
-      // Try parsing from the invisible 'tg://gift' entity
-      const entities = message.reply_to_message.entities || [];
-      for (const ent of entities) {
-        if (ent.type === 'text_link' && ent.url && ent.url.startsWith('tg://gift?id=')) {
-          bId = parseInt(ent.url.split('=')[1]);
-          break;
-        }
-      }
+      const { decodeInvisibleId } = require('./utils');
+      let bId = decodeInvisibleId(message.reply_to_message.text);
 
       // Legacy fallback for old un-hidden [ID:X] messages
       if (!bId) {
@@ -704,7 +696,10 @@ export class BotHandler {
       const b = birthdays.find((x: any) => x.id === bId);
       if (!b) return;
 
-      await this.bot.sendMessage(chatId, `Reply to this message with a gift idea for <b>${b.name}</b>:<a href="tg://gift?id=${b.id}">&#8203;</a>`, {
+      const { encodeInvisibleId } = require('./utils');
+      const hiddenId = encodeInvisibleId(b.id);
+
+      await this.bot.sendMessage(chatId, `Reply to this message with a gift idea for <b>${b.name}</b>:${hiddenId}`, {
         reply_markup: { force_reply: true, selective: true }
       });
       await this.bot.answerCallbackQuery(query.id);

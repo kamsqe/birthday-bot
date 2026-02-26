@@ -332,13 +332,33 @@ export const WebAppHtml = `
               <p class="text-gray-400 text-sm mt-0.5 font-medium">\${monthNames[b.birth_month - 1]} \${b.birth_day}</p>
             </div>
           </div>
-          <button class="h-10 w-10 flex items-center justify-center text-gray-500 hover:text-red-400 bg-white/5 rounded-full backdrop-blur-md transition-colors border border-white/5 hover:border-red-400/30 hover:bg-red-400/10 active:scale-95" title="Delete">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-          </button>
+          <div class="flex items-center gap-2 relative">
+            <button class="h-10 w-10 flex items-center justify-center text-gray-400 hover:text-white bg-white/5 rounded-full backdrop-blur-md transition-colors border border-white/5 hover:bg-white/10 active:scale-95 btn-manage" title="Manage Options">⚙️</button>
+            <button class="h-10 w-10 flex items-center justify-center text-gray-500 hover:text-red-400 bg-white/5 rounded-full backdrop-blur-md transition-colors border border-white/5 hover:border-red-400/30 hover:bg-red-400/10 active:scale-95 btn-delete" title="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+            </button>
+          </div>
         \`;
 
-        // Attach delete logic to button
-        card.querySelector('button').onclick = () => deleteBirthday(b.id, card);
+        const manageMenu = async (id, name, btn) => {
+          btn.innerText = '...';
+          try {
+            const res = await fetch('/api/manage/' + id, { method: 'POST', headers: authHeaders });
+            if (res.ok) {
+              if (tg) tg.showAlert('Manage menu sent to chat!', () => { tg.close(); });
+              else alert('Manage menu sent to chat!');
+            } else {
+              throw new Error('Manage dispatch failed');
+            }
+          } catch(e) {
+            btn.innerText = '⚙️';
+            if (tg) tg.showAlert('Failed to dispatch menu.');
+          }
+        };
+
+        // Attach event handlers
+        card.querySelector('.btn-delete').onclick = () => deleteBirthday(b.id, card);
+        card.querySelector('.btn-manage').onclick = () => manageMenu(b.id, b.name, card.querySelector('.btn-manage'));
         
         listEl.appendChild(card);
       });

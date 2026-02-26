@@ -1,5 +1,6 @@
 import { DBRepo } from './db';
 import { validateInitData } from './auth';
+import { TelegramBot } from './telegram';
 
 export async function handleApiRequest(request: Request, env: any): Promise<Response> {
   const url = new URL(request.url);
@@ -62,6 +63,32 @@ export async function handleApiRequest(request: Request, env: any): Promise<Resp
     }
 
     await db.deleteBirthday(bId, tgId);
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  if (request.method === 'POST' && path.startsWith('/api/manage/')) {
+    const bId = parseInt(path.split('/').pop() || '0');
+    if (!bId) return new Response('Bad Request', { status: 400 });
+
+    const existing = await db.getBirthdaysByUser(tgId, 100);
+    const b = existing.find(x => x.id === bId);
+    if (!b) return new Response('Forbidden', { status: 403 });
+
+    const rel = b.relationship || 'friend';
+    const hasTemplates = ['friend', 'family', 'colleague', 'romantic'].includes(rel);
+
+    const keyboard: any = { inline_keyboard: [] };
+    keyboard.inline_keyboard.push([{ text: '🛒 Wishlist Ideas', callback_data: `wishlist_view:${b.id}` }]);
+    if (hasTemplates) {
+      keyboard.inline_keyboard.push([{ text: '💌 Generate Card', callback_data: `tpl_cat:${b.id}:${rel}` }]);
+    }
+    keyboard.inline_keyboard.push([{ text: `❌ Delete Reminder`, callback_data: `list_del_confirm:${b.id}:0` }]);
+
+    const bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN);
+    await bot.sendMessage(tgId, `⚙️ <b>Manage Profile: ${b.name}</b>\n\nWhat would you like to do?`, keyboard);
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' }
     });

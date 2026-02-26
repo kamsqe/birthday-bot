@@ -1,6 +1,7 @@
 import { BotHandler } from './src/handlers.ts';
 import { TelegramBot, TelegramUpdate } from './src/telegram.ts';
 import { DBRepo } from './src/db.ts';
+import { encodeInvisibleId } from './src/utils.ts';
 
 class MockDB extends DBRepo {
   constructor() {
@@ -14,6 +15,11 @@ class MockDB extends DBRepo {
       { id: 1, name: 'Alice', birth_month: 2, birth_day: 28, relationship: 'friend' },
       { id: 2, name: 'Bob', birth_month: 3, birth_day: 15, relationship: 'family' }
     ] as any;
+  }
+
+  async addWishlistItem(item: any) {
+    console.log(`[MockDB] addWishlistItem -> bId: ${item.birthday_id}, text: ${item.item_text}`);
+    return;
   }
 }
 
@@ -76,6 +82,25 @@ async function runTests() {
       from: { id: 12345, is_bot: false, first_name: 'Tester' },
       message: { message_id: 100, chat: { id: 12345, type: 'private' } } as any,
       data: 'list_dash'
+    }
+  } as TelegramUpdate);
+  const hiddenId = encodeInvisibleId(3);
+  
+  console.log("\n--- TEST 4: User replies to wishlist ---");
+  await handler.handleUpdate({
+    update_id: 4,
+    message: {
+      message_id: 11,
+      chat: { id: 12345, type: 'private' },
+      from: { id: 12345, is_bot: false, first_name: 'Tester' },
+      date: 123123,
+      text: "MacBook Pro",
+      reply_to_message: {
+        message_id: 10,
+        chat: { id: 12345, type: 'private' },
+        date: 123123,
+        text: `Reply to this message with a gift idea for Kambsr:${hiddenId}`,
+      }
     }
   } as TelegramUpdate);
 }
