@@ -13,23 +13,32 @@ export class BotHandler {
   }
 
   private async handleMessage(message: any) {
-    const text = message.text;
+    let text = message.text || '';
     const chatId = message.chat.id;
+    const isGroup = chatId < 0;
+    const userId = message.from?.id || chatId;
+
+    // Strip @botname suffix from commands in groups (e.g. /list@birthday_bot -> /list)
+    if (text.startsWith('/')) {
+      text = text.split('@')[0];
+    }
 
     // Ensure the chat exists in our DB
     await this.db.upsertUser({ tg_id: chatId });
 
     // Check for active conversation state (e.g. waiting for wishlist input)
-    const chatState = await this.db.getChatState(chatId);
+    // In groups, state is keyed by the user who initiated the flow
+    const stateKey = isGroup ? userId : chatId;
+    const chatState = await this.db.getChatState(stateKey);
     if (chatState && text && !text.startsWith('/')) {
       if (chatState.state === 'awaiting_wishlist') {
         const bId = parseInt(chatState.data);
-        await this.db.clearChatState(chatId);
+        await this.db.clearChatState(stateKey);
         if (bId) {
           await this.db.addWishlistItem({
             birthday_id: bId,
             item_text: text,
-            added_by_tg_id: chatId
+            added_by_tg_id: userId
           });
           await this.bot.sendMessage(chatId, `✅ Added gift idea to the wishlist! Type /list to see your Dashboard.`);
           return;
@@ -37,26 +46,28 @@ export class BotHandler {
       }
     }
 
+    // In groups, only respond to bot commands — don't process random messages
+    if (isGroup && !text.startsWith('/')) return;
+
     if (text.startsWith('/start')) {
-      const isGroup = chatId < 0;
       let msg = '';
       if (isGroup) {
-        msg = `🎉 <b>Welcome to the Group Birthday Bot!</b>\n\nI will help this group remember birthdays. When a birthday arrives, I'll send a reminder directly to this chat.\n\nTo get started, add a birthday by typing:\n<code>/add Name</code>`;
+        msg = `🎉 <b>Welcome to the Group Birthday Bot!</b>\n\nI will help this group remember birthdays. When a birthday arrives, I'll send a reminder directly to this chat.\n\n<b>Commands:</b>\n<code>/add Name</code> — Add a birthday\n<code>/list</code> — View all birthdays\n<code>/settings</code> — Configure reminders\n<code>/help</code> — Full guide`;
       } else {
         msg = `🎉 <b>Welcome to the Birthday Bot!</b>\n\nI'm your personal assistant for tracking birthdays, sending you timely reminders, and helping you generate awesome, personalized messages and GIFs! 🥂\n\n<b>How it works:</b>\n1. Add your friends' birthdays using <code>/add Name</code>\n2. I'll silently keep track of them and send you reminders\n3. Use <b>Edit / Manage</b> to generate messages, GIFs, and save gift ideas!\n\n👇 Try the commands below to get started!`;
       }
       
-      const keyboard = isGroup ? undefined : {
+      const keyboard: InlineKeyboardMarkup = {
         inline_keyboard: [
-          [{ text: '📋 View My Birthdays', callback_data: `list_dash` }],
-          [{ text: '❓ How it Works (Tutorial)', callback_data: `help_tutorial` }]
+          [{ text: '📋 View Birthdays', callback_data: `list_dash` }],
+          [{ text: '❓ How it Works', callback_data: `help_tutorial` }]
         ]
       };
 
       await this.bot.sendMessage(chatId, msg, keyboard);
     } 
     else if (text.startsWith('/help')) {
-      const msg = `📖 <b>Birthday Bot Quick Guide</b>\n\nHere are the commands you can use:\n\n📱 <b>Dashboard</b>\n<code>/list</code> — Open your Dashboard to see upcoming birthdays and manage your list. This includes the beautiful Web App interface!\n\n➕ <b>Adding Birthdays</b>\n<code>/add Name</code> — Add a new birthday (e.g. <code>/add Michael</code>). The bot will prompt you for the rest.\n\n⚙️ <b>Settings</b>\n<code>/settings</code> — Change your timezone and select when you want to be reminded (e.g. 7 days before, Day-Of, etc.)\n\n🎁 <b>Gift Wishlists</b>\nYou can reply to any text in a chat with "gift idea for [ID]" to save a gift idea for that person!\n\nIf you ever get stuck, just type <code>/start</code> again!`;
+      const msg = `📖 <b>Birthday Bot Quick Guide</b>\n\nHere are the commands you can use:\n\n📋 <b>Dashboard</b>\n<code>/list</code> — See upcoming birthdays with manage options\n\n➕ <b>Adding Birthdays</b>\n<code>/add Name</code> — Add a new birthday (e.g. <code>/add Michael</code>)\n\n⚙️ <b>Settings</b>\n<code>/settings</code> — Change timezone and reminder frequency\n\n🎁 <b>Gift Wishlists</b>\nUse <b>Edit / Manage → Wishlist Ideas → ➕ Add Idea</b> from the /list menu to save gift ideas for each person.\n\n💌 <b>Message Templates & AI</b>\nUse <b>Edit / Manage → Message Templates</b> to browse pre-written messages, or <b>AI Generator</b> to create a custom one!\n\n🎉 <b>GIF Cards</b>\nGenerate a birthday GIF from the templates menu — forward it to your friend!\n\nType <code>/start</code> anytime to see the welcome screen.`;
       await this.bot.sendMessage(chatId, msg);
     }
     else if (text.startsWith('/admin_setup_commands')) {
@@ -178,7 +189,8 @@ export class BotHandler {
 
       await this.bot.sendMessage(chatId, "⚙️ <b>Settings</b>\n\nChoose reminder frequency for this chat:", keyboard);
     }
-    else {
+    else if (!isGroup) {
+      // Only show fallback in private chats — don't spam groups
       await this.bot.sendMessage(chatId, "I didn't understand that. Try <code>/start</code>, <code>/add Name</code>, <code>/list</code> or <code>/settings</code>.");
     }
   }
@@ -480,7 +492,7 @@ export class BotHandler {
       await this.bot.editMessageText(chatId, messageId, msg, keyboard);
     }
     else if (data === 'help_tutorial') {
-      const msg = `📖 <b>Birthday Bot Quick Guide</b>\n\nHere are the commands you can use:\n\n📱 <b>Dashboard</b>\n<code>/list</code> — Open your Dashboard to see upcoming birthdays and manage your list. This includes the beautiful Web App interface!\n\n➕ <b>Adding Birthdays</b>\n<code>/add Name</code> — Add a new birthday (e.g. <code>/add Michael</code>). The bot will prompt you for the rest.\n\n⚙️ <b>Settings</b>\n<code>/settings</code> — Change your timezone and select when you want to be reminded (e.g. 7 days before, Day-Of, etc.)\n\n🎁 <b>Gift Wishlists</b>\nYou can reply to any text in a chat with "gift idea for [ID]" to save a gift idea for that person!\n\nIf you ever get stuck, just type <code>/start</code> again!`;
+      const msg = `📖 <b>Birthday Bot Quick Guide</b>\n\nHere are the commands you can use:\n\n📋 <b>Dashboard</b>\n<code>/list</code> — See upcoming birthdays with manage options\n\n➕ <b>Adding Birthdays</b>\n<code>/add Name</code> — Add a new birthday (e.g. <code>/add Michael</code>)\n\n⚙️ <b>Settings</b>\n<code>/settings</code> — Change timezone and reminder frequency\n\n🎁 <b>Gift Wishlists</b>\nUse <b>Edit / Manage → Wishlist Ideas → ➕ Add Idea</b> from the /list menu to save gift ideas for each person.\n\n💌 <b>Message Templates & AI</b>\nUse <b>Edit / Manage → Message Templates</b> to browse pre-written messages, or <b>AI Generator</b> to create a custom one!\n\n🎉 <b>GIF Cards</b>\nGenerate a birthday GIF from the templates menu — forward it to your friend!\n\nType <code>/start</code> anytime to see the welcome screen.`;
       const keyboard: InlineKeyboardMarkup = {
         inline_keyboard: [[{ text: '🔙 Back to Menu', callback_data: `list_dash` }]]
       };
@@ -693,7 +705,9 @@ export class BotHandler {
       const b = birthdays.find((x: any) => x.id === bId);
       if (!b) return;
 
-      await this.db.setChatState(chatId, 'awaiting_wishlist', bId.toString());
+      // In groups, key state by user ID so multiple users can add ideas independently
+      const stateKey = chatId < 0 ? query.from.id : chatId;
+      await this.db.setChatState(stateKey, 'awaiting_wishlist', bId.toString());
       await this.bot.sendMessage(chatId, `🎁 <b>Send me your gift idea for ${b.name}!</b>\n\n<i>Just type it as your next message. You have 5 minutes.</i>`);
     }
     else if (data.startsWith('wishlist_del:')) {
