@@ -15,30 +15,25 @@ export class BotHandler {
   private async handleMessage(message: any) {
     const text = message.text;
     const chatId = message.chat.id;
-    // const userId = message.from.id; We now scope to the chat itself!
 
-    // Ensure the chat exists in our DB (works for both private users & groups)
+    // Ensure the chat exists in our DB
     await this.db.upsertUser({ tg_id: chatId });
 
-    // Handle Wishlist item replies
-    if (message.reply_to_message?.text?.includes('gift idea for')) {
-      const { decodeInvisibleId } = require('./utils');
-      let bId = decodeInvisibleId(message.reply_to_message.text);
-
-      // Legacy fallback for old un-hidden [ID:X] messages
-      if (!bId) {
-        const match = message.reply_to_message.text.match(/\[ID:(\d+)\]/);
-        if (match) bId = parseInt(match[1]);
-      }
-
-      if (bId) {
-        await this.db.addWishlistItem({
-          birthday_id: bId,
-          item_text: text,
-          added_by_tg_id: chatId // Or message.from.id if we tracked individual users in group
-        });
-        await this.bot.sendMessage(chatId, `✅ Added gift idea to the wishlist! Type /list to view it.`);
-        return;
+    // Check for active conversation state (e.g. waiting for wishlist input)
+    const chatState = await this.db.getChatState(chatId);
+    if (chatState && text && !text.startsWith('/')) {
+      if (chatState.state === 'awaiting_wishlist') {
+        const bId = parseInt(chatState.data);
+        await this.db.clearChatState(chatId);
+        if (bId) {
+          await this.db.addWishlistItem({
+            birthday_id: bId,
+            item_text: text,
+            added_by_tg_id: chatId
+          });
+          await this.bot.sendMessage(chatId, `✅ Added gift idea to the wishlist! Type /list to see your Dashboard.`);
+          return;
+        }
       }
     }
 
@@ -48,12 +43,12 @@ export class BotHandler {
       if (isGroup) {
         msg = `🎉 <b>Welcome to the Group Birthday Bot!</b>\n\nI will help this group remember birthdays. When a birthday arrives, I'll send a reminder directly to this chat.\n\nTo get started, add a birthday by typing:\n<code>/add Name</code>`;
       } else {
-        msg = `🎉 <b>Welcome to the Birthday Bot!</b>\n\nI'm your personal assistant for tracking birthdays, sending you timely reminders, and helping you generate awesome, personalized messages and GIFs! 🥂\n\n<b>How it works:</b>\n1. Add your friends' birthdays using the <b>Web App</b> or <code>/add</code>\n2. I'll silently keep track of them and send you a reminder exactly when you need it.\n3. You can click "Generate Message" or "Create GIF" right from the reminder!\n\n👇 Click below to open your Dashboard and add someone!`;
+        msg = `🎉 <b>Welcome to the Birthday Bot!</b>\n\nI'm your personal assistant for tracking birthdays, sending you timely reminders, and helping you generate awesome, personalized messages and GIFs! 🥂\n\n<b>How it works:</b>\n1. Add your friends' birthdays using <code>/add Name</code>\n2. I'll silently keep track of them and send you reminders\n3. Use <b>Edit / Manage</b> to generate messages, GIFs, and save gift ideas!\n\n👇 Try the commands below to get started!`;
       }
       
       const keyboard = isGroup ? undefined : {
         inline_keyboard: [
-          [{ text: '📱 Open Web App Dashboard', web_app: { url: `https://birthday-bot.mirmanoov.workers.dev/app` } }],
+          [{ text: '📋 View My Birthdays', callback_data: `list_dash` }],
           [{ text: '❓ How it Works (Tutorial)', callback_data: `help_tutorial` }]
         ]
       };
@@ -79,13 +74,7 @@ export class BotHandler {
       const desc = "🎉 Welcome to the Birthday Bot!\n\nI'm your personal assistant for tracking birthdays and sending you timely reminders.\n\nWhat I can do:\n1. 🗓 Track your friends' birthdays\n2. 🔔 Send you a reminder before the big day\n3. 🎁 Save gift ideas\n4. ✨ Help you generate personalized Birthday messages and GIFs using AI!\n\nHit START below to begin!";
       await this.bot.setMyDescription(desc);
 
-      await this.bot.setChatMenuButton({
-        type: "web_app",
-        text: "Dashboard",
-        web_app: { url: `https://birthday-bot.mirmanoov.workers.dev/app` }
-      });
-
-      await this.bot.sendMessage(chatId, `✅ Bot commands, descriptions, and the Dashboard Menu Button successfully registered!`);
+      await this.bot.sendMessage(chatId, `✅ Bot commands and descriptions successfully registered!`);
     }
     else if (text.startsWith('/list')) {
       const birthdays = await this.db.getBirthdaysByUser(chatId);
@@ -142,10 +131,8 @@ export class BotHandler {
         msg += `<i>(You have ${laterCount} other birthdays saved for later this year)</i>`;
       }
 
-      const webAppUrl = `https://birthday-bot.mirmanoov.workers.dev/app`;
       const keyboard: InlineKeyboardMarkup = {
         inline_keyboard: [
-          [{ text: '📱 Open Web App Dashboard', web_app: { url: webAppUrl } }],
           [{ text: '🗓️ Browse all by Month', callback_data: `list_month:current` }],
           [{ text: '🛒 Gift Wishlists', callback_data: `list_wishlist:0` }, { text: '✏️ Edit / Manage', callback_data: `list_del_menu:0` }]
         ]
@@ -289,7 +276,7 @@ export class BotHandler {
         text: `✈️ Send message (Text)`, 
         url: `https://t.me/share/url?url=${encodeURIComponent(renderedText)}` 
       }]);
-      keyboard.push([{ text: `🎉 Create GIF Card`, callback_data: `tpl_gif` }]);
+      keyboard.push([{ text: `🎉 Create GIF Card`, callback_data: `tpl_gif:${bId}:${b.relationship || 'friend'}` }]);
       keyboard.push([{ text: '🔙 Back to Categories', callback_data: `tpl_back:${bId}:${b.relationship || 'friend'}` }]);
 
       await this.bot.editMessageText(
@@ -375,7 +362,7 @@ export class BotHandler {
         const keyboard: any[][] = [
           [{ text: '🔄 Regenerate', callback_data: `ai_exec:${bId}:${rel}:${vibe}` }],
           [{ text: `✈️ Send message (Text)`, url: `https://t.me/share/url?url=${encodeURIComponent(generatedText)}` }],
-          [{ text: `🎉 Create GIF Card`, callback_data: `tpl_gif` }],
+          [{ text: `🎉 Create GIF Card`, callback_data: `tpl_gif:${bId}:${rel}` }],
           [{ text: '🔙 Change Vibe', callback_data: `ai_gen:${bId}:${rel}` }],
           [{ text: '🔙 Dashboard', callback_data: `list_dash` }]
         ];
@@ -395,7 +382,11 @@ export class BotHandler {
         await this.bot.editMessageText(chatId, messageId, `❌ Sorry, the AI encountered an error generating your message. Please try again or use standard templates.\n\nError: ${err.message}`, kb);
       }
     }
-    else if (data === 'tpl_gif') {
+    else if (data.startsWith('tpl_gif:')) {
+      const gifParts = data.split(':');
+      const gifBId = parseInt(gifParts[1]) || 0;
+      const gifRel = gifParts[2] || 'friend';
+
       const rawText = query.message.text || '';
       const parts = rawText.split('\n\n');
       const captionText = parts.length > 1 ? parts.slice(1).join('\n\n') : rawText;
@@ -409,8 +400,15 @@ export class BotHandler {
       ];
       const randomGif = gifs[Math.floor(Math.random() * gifs.length)];
 
+      const backKeyboard: InlineKeyboardMarkup = {
+        inline_keyboard: [
+          [{ text: '🔙 Back to Categories', callback_data: `tpl_back:${gifBId}:${gifRel}` }],
+          [{ text: '🔙 Dashboard', callback_data: `list_dash` }]
+        ]
+      };
+
       await this.bot.sendAnimation(chatId, randomGif, captionText);
-      await this.bot.answerCallbackQuery(query.id, "GIF Card created! Forward it to your friend!", false);
+      await this.bot.sendMessage(chatId, `🎉 GIF Card created! Forward the GIF above to your friend.`, backKeyboard);
     }
     else if (data.startsWith('set_pref:')) {
       const pref = data.split(':')[1];
@@ -537,10 +535,8 @@ export class BotHandler {
         msg += `<i>(You have ${laterCount} other birthdays saved for later this year)</i>`;
       }
 
-      const webAppUrl = `https://birthday-bot.mirmanoov.workers.dev/app`;
       const keyboard: InlineKeyboardMarkup = {
         inline_keyboard: [
-          [{ text: '📱 Open Web App Dashboard', web_app: { url: webAppUrl } }],
           [{ text: '🗓️ Browse all by Month', callback_data: `list_month:current` }],
           [{ text: '🛒 Gift Wishlists', callback_data: `list_wishlist:0` }, { text: '✏️ Edit / Manage', callback_data: `list_del_menu:0` }]
         ]
@@ -610,7 +606,8 @@ export class BotHandler {
       keyboard.inline_keyboard.push([{ text: '🛒 Wishlist Ideas', callback_data: `wishlist_view:${b.id}` }]);
       
       if (hasTemplates) {
-        keyboard.inline_keyboard.push([{ text: '💌 Generate Card', callback_data: `tpl_cat:${b.id}:${rel}` }]);
+        keyboard.inline_keyboard.push([{ text: '💌 Message Templates', callback_data: `tpl_back:${b.id}:${rel}` }]);
+        keyboard.inline_keyboard.push([{ text: '✨ AI Generator', callback_data: `ai_gen:${b.id}:${rel}` }]);
       }
       
       keyboard.inline_keyboard.push([{ text: `❌ Delete Reminder`, callback_data: `list_del_confirm:${b.id}:${page}` }]);
@@ -696,14 +693,8 @@ export class BotHandler {
       const b = birthdays.find((x: any) => x.id === bId);
       if (!b) return;
 
-      const { encodeInvisibleId } = require('./utils');
-      const hiddenId = encodeInvisibleId(b.id);
-
-      await this.bot.sendMessage(chatId, `Reply to this message with a gift idea for <b>${b.name}</b>:${hiddenId}`, {
-        reply_markup: { force_reply: true, selective: true }
-      });
-      await this.bot.answerCallbackQuery(query.id);
-      return;
+      await this.db.setChatState(chatId, 'awaiting_wishlist', bId.toString());
+      await this.bot.sendMessage(chatId, `🎁 <b>Send me your gift idea for ${b.name}!</b>\n\n<i>Just type it as your next message. You have 5 minutes.</i>`);
     }
     else if (data.startsWith('wishlist_del:')) {
       const parts = data.split(':');

@@ -134,4 +134,23 @@ export class DBRepo {
       `DELETE FROM wishlists WHERE id = ? AND birthday_id = ?`
     ).bind(itemId, birthdayId).run();
   }
+
+  // Chat state machine for multi-step flows
+  async setChatState(tgId: number, state: string, data: string): Promise<void> {
+    const expiresAt = Math.floor(Date.now() / 1000) + 300; // 5 min TTL
+    await this.db.prepare(
+      `INSERT OR REPLACE INTO chat_states (tg_id, state, data, expires_at) VALUES (?, ?, ?, ?)`
+    ).bind(tgId, state, data, expiresAt).run();
+  }
+
+  async getChatState(tgId: number): Promise<{ state: string, data: string } | null> {
+    const row = await this.db.prepare(
+      `SELECT state, data FROM chat_states WHERE tg_id = ? AND expires_at > ?`
+    ).bind(tgId, Math.floor(Date.now() / 1000)).first<{ state: string, data: string }>();
+    return row || null;
+  }
+
+  async clearChatState(tgId: number): Promise<void> {
+    await this.db.prepare(`DELETE FROM chat_states WHERE tg_id = ?`).bind(tgId).run();
+  }
 }
