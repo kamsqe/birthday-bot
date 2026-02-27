@@ -58,3 +58,13 @@ export function decodeInvisibleId(text: string): number | null {
     const binary = res[1].split('').map(c => c === ZW0 ? '0' : '1').join('');
     return parseInt(binary, 2);
 }
+
+export function paginate<T>(items: T[], page: number, perPage: number = 5) {
+  const totalPages = Math.max(1, Math.ceil(items.length / perPage));
+  if (page < 0) page = totalPages - 1;
+  if (page >= totalPages) page = 0;
+  
+  const pageItems = items.slice(page * perPage, (page + 1) * perPage);
+  
+  return { pageItems, totalPages, currentPage: page };
+}

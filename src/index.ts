@@ -1,6 +1,6 @@
 import { DBRepo } from './db';
 import { TelegramBot, TelegramUpdate } from './telegram';
-import { BotHandler } from './handlers';
+import { Router } from './router';
 import { processReminders } from './cron';
 
 export default {
@@ -11,9 +11,9 @@ export default {
 				const update: TelegramUpdate = await request.json();
 				const db = new DBRepo(env.DB);
 				const bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN);
-				const handler = new BotHandler(bot, db, env.AI);
+				const router = new Router(bot, db, env.AI);
 
-				ctx.waitUntil(handler.handleUpdate(update).catch(err => {
+				ctx.waitUntil(router.handleUpdate(update).catch(err => {
 					console.error('Error handling update:', err);
 				}));
 

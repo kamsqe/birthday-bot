@@ -1,4 +1,4 @@
-import { BotHandler } from './src/handlers.ts';
+import { Router } from './src/router.ts';
 import { TelegramBot, TelegramUpdate } from './src/telegram.ts';
 import { DBRepo } from './src/db.ts';
 
@@ -76,10 +76,10 @@ class MockBot extends TelegramBot {
 async function runTests() {
   const mockDb = new MockDB();
   const mockBot = new MockBot();
-  const handler = new BotHandler(mockBot, mockDb, null);
+  const router = new Router(mockBot, mockDb, null);
 
   console.log("=== TEST 1: /start ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 1,
     message: {
       message_id: 10,
@@ -91,7 +91,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 2: /list ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 2,
     message: {
       message_id: 11,
@@ -103,7 +103,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 3: Click Edit / Manage ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 3,
     callback_query: {
       id: 'cb_1',
@@ -114,7 +114,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 4: Click Manage Alice ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 4,
     callback_query: {
       id: 'cb_2',
@@ -125,7 +125,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 5: Click Message Templates (tpl_back) ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 5,
     callback_query: {
       id: 'cb_3',
@@ -136,7 +136,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 6: Click Funny template sub-category ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 6,
     callback_query: {
       id: 'cb_4',
@@ -147,7 +147,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 7: Click Wishlist Ideas ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 7,
     callback_query: {
       id: 'cb_5',
@@ -158,7 +158,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 8: Click Add Idea (state machine) ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 8,
     callback_query: {
       id: 'cb_6',
@@ -169,7 +169,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 9: User types gift idea (state should be active) ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 9,
     message: {
       message_id: 12,
@@ -181,7 +181,7 @@ async function runTests() {
   } as TelegramUpdate);
 
   console.log("\n=== TEST 10: Back to Dashboard ===");
-  await handler.handleUpdate({
+  await router.handleUpdate({
     update_id: 10,
     callback_query: {
       id: 'cb_7',
