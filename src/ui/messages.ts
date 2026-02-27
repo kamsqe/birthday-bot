@@ -1,5 +1,5 @@
 import { Birthday } from '../db';
-import { getZodiacSign, getRelationshipIcon } from '../utils';
+import { getZodiacSign, getRelationshipIcon, formatDate } from '../utils';
 
 export class Messages {
   static welcome(isGroup: boolean): string {
@@ -28,7 +28,7 @@ export class Messages {
     if (next30.length > 0) {
       msg += `🗓️ <b>Next 30 Days:</b>\n`;
       next30.forEach(b => {
-        msg += `- ${b.icon} <b>${b.name}</b> ${b.sign} — ${b.birth_month}/${b.birth_day}\n`;
+        msg += `- ${b.icon} <b>${b.name}</b> ${b.sign} — ${formatDate(b.birth_month, b.birth_day)}\n`;
       });
       msg += `\n`;
     }
@@ -56,7 +56,7 @@ export class Messages {
       msg += `<i>No birthdays saved for this month.</i>`;
     } else {
       monthBirthdays.forEach(b => {
-        msg += `- ${b.birth_month}/${b.birth_day}: ${getRelationshipIcon(b.relationship)} <b>${b.name}</b> ${getZodiacSign(b.birth_month, b.birth_day)}\n`;
+        msg += `- ${formatDate(b.birth_month, b.birth_day)}: ${getRelationshipIcon(b.relationship)} <b>${b.name}</b> ${getZodiacSign(b.birth_month, b.birth_day)}\n`;
       });
     }
     return msg;

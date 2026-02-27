@@ -2,6 +2,7 @@ import { TelegramBot } from '../telegram';
 import { DBRepo } from '../db';
 import { Messages } from '../ui/messages';
 import { Keyboards } from '../ui/keyboards';
+import { formatDate } from '../utils';
 
 export class OnboardingController {
   
@@ -75,7 +76,7 @@ export class OnboardingController {
       reminded_phases: null
     });
 
-    await bot.editMessageText(chatId, messageId, `✅ Successfully saved <b>${name}</b>'s birthday (${month}/${day})! I will remind this chat when it's time.`);
+    await bot.editMessageText(chatId, messageId, `✅ Successfully saved <b>${name}</b>'s birthday (${formatDate(month, day)})! I will remind this chat when it's time.`);
   }
 
   static async timezoneParams(bot: TelegramBot, db: DBRepo, chatId: number) {

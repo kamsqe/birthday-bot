@@ -1,6 +1,7 @@
 import { InlineKeyboardMarkup } from '../telegram';
 import { Birthday } from '../db';
 import { TEMPLATES } from '../templates';
+import { getDaysInMonth } from '../utils';
 
 export class Keyboards {
   
@@ -40,9 +41,10 @@ export class Keyboards {
   static dayPicker(name: string, month: number): InlineKeyboardMarkup {
     const keyboard: any[][] = [];
     let row: any[] = [];
-    for (let i = 1; i <= 31; i++) {
+    const daysInMonth = getDaysInMonth(month);
+    for (let i = 1; i <= daysInMonth; i++) {
         row.push({ text: i.toString(), callback_data: `add_d:${name}:${month}:${i}` });
-        if (row.length === 5 || i === 31) {
+        if (row.length === 5 || i === daysInMonth) {
             keyboard.push(row);
             row = [];
         }

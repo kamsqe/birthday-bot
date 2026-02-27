@@ -68,3 +68,21 @@ export function paginate<T>(items: T[], page: number, perPage: number = 5) {
   
   return { pageItems, totalPages, currentPage: page };
 }
+
+export function getDaysInMonth(month: number): number {
+  if (month === 2) return 29; // Treat February as having 29 max
+  if ([4, 6, 9, 11].includes(month)) return 30;
+  return 31;
+}
+
+export function formatDate(month: number, day: number): string {
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[month - 1];
+  
+  let suffix = 'th';
+  if (day % 10 === 1 && day !== 11) suffix = 'st';
+  else if (day % 10 === 2 && day !== 12) suffix = 'nd';
+  else if (day % 10 === 3 && day !== 13) suffix = 'rd';
+  
+  return `${day}${suffix} of ${monthName}`;
+}
